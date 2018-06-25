@@ -2,3 +2,4 @@
 corpora/corpora/*
 models/*
 *.log
+*.ipynb_checkpoints/
