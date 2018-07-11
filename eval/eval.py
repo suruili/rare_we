@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[1]:
+# In[11]:
 
 
 import numpy as np
@@ -24,9 +24,52 @@ import nltk
 nltk.download('stopwords')
 from nltk.corpus import stopwords
 import gensim
+import math
 
 
-# In[22]:
+# In[ ]:
+
+
+def produce_top_n_simwords(w_filter,context_embed,n_result,index2word):
+        # compute top n_result similarity weights
+        similarity_scores=[]
+        print('producing top {0} simwords'.format(n_result))
+        similarity = (w_filter.dot(context_embed)+1.0)/2
+        top_words_i=[]
+        count = 0
+        for i in (-similarity).argsort():
+                    if xp.isnan(similarity[i]):
+                        continue
+                    print('{0}: {1}'.format(str(index2word[i]), str(similarity[i])))
+                    count += 1
+                    top_words_i.append(i)
+                    similarity_scores.append(similarity[i])
+                    if count == n_result:
+                        break
+
+        top_vec=w_filter[top_words_i,:]
+        
+        return top_vec,similarity_scores
+    
+def top_mutual_sim(top_vec,similarity_scores):
+#     a=np.array([1,2,3])
+# b=a.reshape(len(a),1)
+# c=(a+b)/2.0
+# d=np.array([[1,1,1],[2,2,2],[3,3,3]])
+# e=d.dot(d.T)
+# print ('e',e)
+# print ('c',c)
+# e*c
+    max_score=similarity_scores[0]
+    similarity_scores=np.array(similarity_scores)
+#     similarity_scores=similarity_scores/sum(similarity_scores)
+    sim_weights=(similarity_scores+similarity_scores.reshape(len(similarity_scores),1))/2.0
+    sim_weights=(sim_weights/float(sum(sum(sim_weights))))*max_score
+    inf_score=sum(sum(top_vec.dot(top_vec.T)*sim_weights))
+    return inf_score
+
+
+# In[35]:
 
 
 # def space_punc(sent):
@@ -67,44 +110,41 @@ import gensim
 #                         print (e)
 #     return pos
 
-def produce_top_n_simwords(w_filter,context_embed,n_result,index2word):
-        # compute top n_result similarity weights
 
-        print('producing top {0} simwords'.format(n_result))
-        similarity = (w_filter.dot(context_embed)+1.0)/2
-        top_words_i=[]
-        count = 0
-        for i in (-similarity).argsort():
-                    if xp.isnan(similarity[i]):
-                        continue
-                    print('{0}: {1}'.format(str(index2word[i]), str(similarity[i])))
-                    count += 1
-                    top_words_i.append(i)
-                    if count == n_result:
-                        break
-
-        top_vec=w_filter[top_words_i,:]
-        return top_vec
-def skipgram_context(model,words,pos):
+    
+def skipgram_context(model,words,pos,weight=None,w2entropy=None):
     context_wvs=[]
+    weights=[]
     for i,word in enumerate(words):
         if i != pos:
+            
             try:
-                context_wvs.append(model[word])
+                if weight=='lda' :
                 
+                    if word in w2entropy and word in model:
+                        print (word,w2entropy[word])
+                        weights.append(1.0/float(w2entropy[word]))
+                        context_wvs.append(model[word])
+                else:
+
+                    context_wvs.append(model[word])
+                    weights.append(1.0)
             except KeyError as e:
                 print ('==warning==: key error in context {0}'.format(e))
-    context_embed=sum(np.array(context_wvs))/len(context_wvs)
+    context_embed=sum(np.array(context_wvs)*np.array(weights).reshape(len(weights),1))/sum(weights)
     return len(context_wvs),context_embed
-    
-def context_inform(test_s,test_w, model,model_type,n_result,w_filter,index2word,weight):
-    test_s=test_s.replace(test_w, ' '+test_w+' ')
 
+
+def context_inform(test_s,test_w, model,model_type,n_result,w_filter,index2word,weight,w2entropy=None):
+    test_s=test_s.replace(test_w, ' '+test_w+' ')
+    
     #test_s=space_punc(test_s)
     print(test_s)
     words=test_s.split()
     pos=words.index(test_w)
     
+    
+    score=1.0
     #decide on model
     if model_type=='context2vec':
         
@@ -112,8 +152,9 @@ def context_inform(test_s,test_w, model,model_type,n_result,w_filter,index2word,
         context_embed = context_embed / xp.sqrt((context_embed * context_embed).sum())
     
     elif model_type=='skipgram':
-        score,context_embed=skipgram_context(model,words,pos)
+        score,context_embed=skipgram_context(model,words,pos,weight,w2entropy)
         context_embed = context_embed / xp.sqrt((context_embed * context_embed).sum())
+        
         
     else:
         print ('model type {0} not recognized'.format(model_type))
@@ -122,8 +163,11 @@ def context_inform(test_s,test_w, model,model_type,n_result,w_filter,index2word,
         
     #decide on weight 
     if weight=='top_mutual_sim':
-        top_vec=produce_top_n_simwords(w_filter,context_embed,n_result,index2word)
-        score=sum(sum(top_vec.dot(top_vec.T)))/(n_result**2)
+        top_vec,sim_scores=produce_top_n_simwords(w_filter,context_embed,n_result,index2word)
+#         score=sum(sum(top_vec.dot(top_vec.T)))/(n_result**2)
+        score=top_mutual_sim(top_vec,sim_scores)
+        if model_type=='skipgram':
+            score=score*score
     elif weight=='learned':
         print ('learned not implemented')
     elif weight=='gaussian':
@@ -134,23 +178,33 @@ def context_inform(test_s,test_w, model,model_type,n_result,w_filter,index2word,
         print ('weight mode {0} not recognized'.format(weight))
     return score,context_embed
 
-def additive_model(test_ss,test_w, model_type,model,n_result,w_filter,index2word,weight=False):
+def additive_model(f_w,test_ss,test_w, model_type,model,n_result,w_filter,index2word,weight=False,w2entropy=None):
+    
     context_out=[]
     context_weights=[]
     for test_s in test_ss.split('@@'):
         test_s=test_s.strip()
-        score,context_embed=context_inform(test_s,test_w, model,model_type,n_result,w_filter,index2word,weight)
+        score,context_embed=context_inform(test_s,test_w, model,model_type,n_result,w_filter,index2word,weight,w2entropy)
         print ('weight is {0}'.format(score))
         context_out.append(context_embed)
         context_weights.append(score)
     context_out=np.array(context_out)
     norm_weights=np.array(context_weights).reshape(len(context_weights),1)/float(sum(context_weights))
+    #f_w.write(','.join(list(norm_weights.reshape(1, len(context_weights))[0])))
     print ('normalized weight: \n  {0}'.format(norm_weights))
     context_avg=sum(norm_weights*context_out)
     print('producing top {0} words for new embedding'.format(n_result))
-    top_vec=produce_top_n_simwords(w_filter,context_avg,n_result,index2word)
-     
+    top_vec,scores=produce_top_n_simwords(w_filter,context_avg,n_result,index2word)
+#     f_w.write(','.join([str(w) for w in list(norm_weights.reshape(1, len(context_weights))[0]))]))
+#     np.savetxt(f_w,norm_weights.reshape(len(context_weights),1),delimiter=',')
+    f_w.write(','.join([str(i[0]) for i in norm_weights])+'\n')
     return context_avg
+
+
+
+
+# In[15]:
+
 
 def filter_w(w,word2index,index2word,word_freq_f):
     #filter out words with freq less than 200, words with no letters in, and stopwords
@@ -181,66 +235,74 @@ def rm_stopw_context(model):
     return model
 
 
-def eval_chimera(chimeras_data_dir,num_sent,context_model,model_type,n_result,w,index2word,weight=False):
-    golds=[]
-    model_predict=[]
-    num_indic='l'+str(num_sent)
-    for root, subdir, fname in os.walk(chimeras_data_dir):
-        for fn in fname:
-            if fn.endswith('fixed.test.txt')and 'l'+str(num_sent)==fn.split('.')[1]: #read in the test file
-                print (fn)
-                data=pd.read_csv(os.path.join(chimeras_data_dir,fn),delimiter='\t')
-                for index, row in data.iterrows():
-                    
-                    #compute context representation
-                    if weight!='learned':
-                        context_avg=additive_model(row[1],'___', model_type,context_model,n_result,w,index2word,weight)
-                   
-                    
-                    #cosine similarity with probe embedding
-                    for gold,probe in zip(row[3].split(','),row[2].split(',')):
-                        try:
-                            cos=w[word2index[probe]].dot(context_avg)
-                            if xp.isnan(cos):
-                                continue
-                            else:
-                                model_predict.append(cos)
-                                golds.append(gold)
-                        except KeyError as e:
-                            print ("====warning key error for probe=====: {0}".format(e))
-    if len(golds)==len(model_predict):
-        print ('spearman correlation is {0}'.format(spearmanr(golds,model_predict)))
-    else:
-        print ('unequal length: gold {0}, model {1}'.format( len(golds),len(model_predict)))
 
 
-    
+# In[24]:
 
 
-# In[25]:
+def eval_chimera(chimeras_data_dir,num_sent,context_model,model_type,n_result,w,index2word,weight=False,w2entropy=None):
+    with open(os.path.join(chimeras_data_dir,'weights_{0}_{1}_{2}'.format(num_sent,model_type,str(weight))),'w') as f_w:
+        spearmans=[]
+        
+        num_indic='l'+str(num_sent)
+        for root, subdir, fname in os.walk(chimeras_data_dir):
+            for fn in fname:
+                if fn.endswith('fixed.test.txt.punct')and 'l'+str(num_sent)==fn.split('.')[1]: #read in the test file
+                    print (fn)
+                    data=pd.read_csv(os.path.join(chimeras_data_dir,fn),delimiter='\t',header=None)
+                    for index, row in data.iterrows():
+                        golds=[]
+                        model_predict=[]
+                        #compute context representation
+                        if weight!='learned':
+                            context_avg=additive_model(f_w,row[1],'___', model_type,context_model,n_result,w,index2word,weight,w2entropy)
 
 
+                        #cosine similarity with probe embedding
+                        for gold,probe in zip(row[3].split(','),row[2].split(',')):
+                            try:
+                                cos=w[word2index[probe]].dot(context_avg)
+                                if xp.isnan(cos):
+                                    continue
+                                else:
+                                    model_predict.append(cos)
+                                    golds.append(gold)
+                                    
+                            except KeyError as e:
+                                print ("====warning key error for probe=====: {0}".format(e))
+                        
+                        sp=spearmanr(golds,model_predict)[0]
+                        print ('spearman correlation is {0}'.format(sp))
+                        if not math.isnan(sp):
+                            spearmans.append(sp)
+#         if len(golds)==len(model_predict):
+#             print ('spearman correlation is {0}'.format(spearmanr(golds,model_predict)))
+#         else:
+#             print ('unequal length: gold {0}, model {1}'.format( len(golds),len(model_predict)))
+
+        print ("AVERAGE RHO:",float(sum(spearmans))/float(len(spearmans)))
 
 
+# In[3]:
 
 
-# In[14]:
+# a=np.array([1,2,3])
+# b=a.reshape(len(a),1)
+# c=(a+b)/2.0
+# c=c/(sum(sum(c)))
+# # print(sum(sum(c)))
+# d=np.array([[1,1,1],[2,2,2],[3,3,3]])
+# e=d.dot(d.T)
+# print ('e',e)
+# print ('c',c)
+# e*c
+# a
+# context_embed= model.context2vec(['cats',',','dogs',',','snakes','are','animals'],2 )
+# context_embed = context_embed / xp.sqrt((context_embed * context_embed).sum())
+# produce_top_n_simwords(context_embed=context_embed,index2word=index2word,w_filter=w,n_result=20)
 
 
-
-
-
-# In[29]:
-
-
-# model = gensim.models.Word2Vec.load('../models/wiki_all.model/wiki_all.sent.split.model')
-# stopw=stopwords.words('english')
-# stopw=[word.encode('utf-8') for word in stopw]
-# model={word:model.wv.__getitem__(word) for word in model.wv.vocab if word not in stopw}
-# model['it']
-
-
-# In[29]:
+# In[18]:
 
 
 
@@ -248,26 +310,29 @@ if __name__=="__main__":
     
     #params read in
     if sys.argv[0]=='/usr/local/lib/python2.7/dist-packages/ipykernel_launcher.py':
-        model_param_file='../models/context2vec/model_dir/context2vec.ukwac.model.params'
-        model_type='context2vec'
-        context_rm_stopw=0
+#         model_param_file='../models/context2vec/model_dir/context2vec.ukwac.model.params'
+#         model_param_file='../models/context2vec/model_dir/MODEL-wiki.params.0'
 
-#         model_param_file='../models/wiki_all.model/wiki_all.sent.split.model'
-#         model_type='skipgram'
-#         context_rm_stopw=1
-
-        weight='top_mutual_sim'
+#         model_type='context2vec'
+#         context_rm_stopw=0
+        model_param_file='../models/wiki_all.model/wiki_all.sent.split.model'
+        model_type='skipgram'
+        context_rm_stopw=1
+        weight='lda'
         data='./eval_data/data-chimeras'
+
     else:
         if len(sys.argv) < 3:
             print >> sys.stderr, "Usage: %s <model_param_file> <model_type> <weight> <context_rm_stop>"  % (sys.argv[0])
             sys.exit(1)
-
+        
         model_param_file = sys.argv[1]
         model_type=sys.argv[2]
+        
         weight=int(sys.argv[3])
         context_rm_stop=int.argv[4]
         data =argv[5]
+       
     
     
     #gpu setup 
@@ -306,12 +371,18 @@ if __name__=="__main__":
         
         
     #weight
+    w2entropy=None
     if weight=='top_mutual_sim':
         #filter w : remove stop words and low freq words 
         print ('filter words for target....')
-        w,word2index,index2word=filter_w(w,word2index,index2word,'word_freq')
+        print (len(w))
+        w,word2index,index2word=filter_w(w,word2index,index2word,'word_freq_uwac')
+        print (len(w))
         n_result = 20
-        
+    elif weight=='lda':
+        print ('load vectors and entropy')
+        w2entropy=pickle.load(open('../models/lda/w2entropy'))
+
     # remove context stop words
     if int(context_rm_stopw)==1:
         print ('filter words for context....')
@@ -321,10 +392,10 @@ if __name__=="__main__":
     
 
 
-# In[30]:
+# In[37]:
 
 
 #read in data
 if data.split('/')[-1]== 'data-chimeras':
-        eval_chimera(data,2,model,model_type,n_result,w,index2word,weight)
+        eval_chimera(data,6,model,model_type,20,w,index2word,weight,w2entropy)
 
