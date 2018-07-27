@@ -1,13 +1,7 @@
 
 # coding: utf-8
 
-# In[102]:
-
-
-# space_punc('" What a gorgeous man to work for')
-
-
-# In[101]:
+# In[ ]:
 
 
 import os
@@ -51,7 +45,7 @@ if __name__=="__main__":
     trial2sent={}
     chimeras_data_dir='./eval_data/data-chimeras'
     
-    data=pd.read_csv(os.path.join(chimeras_data_dir,'dataset.csv'))
+    data=pd.read_csv(os.path.join(chimeras_data_dir,'dataset_fixed.csv'))
 
     for index, row in data.iterrows():
         
@@ -79,7 +73,8 @@ if __name__=="__main__":
     
     for root, subdir, fnames in os.walk(chimeras_data_dir):
         for fn in fnames:
-            if fn.endswith('fixed.test.txt'):
+            if fn.endswith('fixed.train.txt'):
+                print (fn)
                 infos=fn.split('.')
                 sent_no=infos[1].upper()
                 data_sub=pd.read_csv(os.path.join(chimeras_data_dir,fn),delimiter='\t',header=None)
@@ -89,10 +84,4 @@ if __name__=="__main__":
                         
                         
     
-
-
-# In[116]:
-
-
-
 
