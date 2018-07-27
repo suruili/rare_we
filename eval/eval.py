@@ -160,9 +160,9 @@ def context_inform(test_s,test_w, model,model_type,n_result,w_filter,index2word,
     #decide on weight per sentence
     if weight==TOP_MUTUAL_SIM:
         print (weight)
-        if word2index_target!=None:
+#         if word2index_target==None:
             #context2vec word embedding space neighbours
-            top_vec,sim_scores,top_words=produce_top_n_simwords(w_filter,context_embed,n_result,index2word)
+        top_vec,sim_scores,top_words=produce_top_n_simwords(w_filter,context_embed,n_result,index2word)
         #skipgram word embedding space neighbours when context2vec-skipgram
         score=top_mutual_sim(top_vec,sim_scores)
         print (score)
