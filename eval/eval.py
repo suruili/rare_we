@@ -29,7 +29,7 @@ import math
 
 
 
-# In[5]:
+# In[2]:
 
 
 def produce_top_n_simwords(w_filter,context_embed,n_result,index2word):
@@ -73,8 +73,29 @@ def top_mutual_sim(top_vec,similarity_scores):
     inf_score=sum(sum(top_vec.dot(top_vec.T)*sim_weights))
     return inf_score
 
+def top_cluster_density(top_vec,similarity_scores):
+    #normalize the top_vec
+    s = np.sqrt((top_vec * top_vec).sum(1))
+    s[s==0.] = 1.
+    top_vec = top_vec/ s.reshape((s.shape[0], 1))
+    
+    #perform the centroid
+    max_score=similarity_scores[0]
+    similarity_scores=np.array(similarity_scores).reshape(len(similarity_scores),1)/sum(similarity_scores)
+    centroid_vector=sum(top_vec*similarity_scores)
+    # average of cosine distance to the centroid,weighted by max scores
+    inf_score=sum(top_vec.dot(centroid_vector))/len(top_vec)*max_score
+    return inf_score
 
-# In[43]:
+
+# In[3]:
+
+
+top_cluster_density(np.array([[1.,1.,1.],[4.,4.,4.]]),np.array([0.3,0.1]))
+# np.linalg.norm([0.57735027,0.57735027, 0.57735027])
+
+
+# In[27]:
 
 
 def load_w2salience(w2salience_f,weight_type):
@@ -160,13 +181,20 @@ def context_inform(test_s,test_w, model,model_type,n_result,w_filter,index2word,
     #decide on weight per sentence
     if weight==TOP_MUTUAL_SIM:
         print (weight)
-#         if word2index_target==None:
-            #context2vec word embedding space neighbours
+#         if word2index_target==None: #not context2vec-skipgram
+#             context2vec word embedding space neighbours
         top_vec,sim_scores,top_words=produce_top_n_simwords(w_filter,context_embed,n_result,index2word)
         #skipgram word embedding space neighbours when context2vec-skipgram
         score=top_mutual_sim(top_vec,sim_scores)
         print (score)
-
+    elif weight==TOP_CLUSTER_DENSITY:
+        print (weight)
+#         if word2index_target==None: #not context2vec-skipgram
+#             context2vec word embedding space neighbours
+        top_vec,sim_scores,top_words=produce_top_n_simwords(w_filter,context_embed,n_result,index2word)
+        score=top_cluster_density(top_vec,sim_scores)
+        print (score)
+        
     elif weight=='learned':
         print ('learned not implemented')
     elif weight=='gaussian':
@@ -220,7 +248,7 @@ def additive_model(f_w,test_ss,test_w, model_type,model,n_result,w_filter,index2
 
 
 
-# In[6]:
+# In[5]:
 
 
 def filter_w(w,word2index,index2word):
@@ -250,7 +278,7 @@ def rm_stopw_context(model):
 
 
 
-# In[7]:
+# In[6]:
 
 
 def eval_chimera(chimeras_data_f,context_model,model_type,n_result,w,index2word,weight=False,w2entropy=None,w_target=None,word2index_target=None,index2word_target=None):
@@ -298,33 +326,15 @@ def eval_chimera(chimeras_data_f,context_model,model_type,n_result,w,index2word,
         print ("AVERAGE RHO:",float(sum(spearmans))/float(len(spearmans)))
 
 
-# In[8]:
-
-
-# a=np.array([1,2,3])
-# b=a.reshape(len(a),1)
-# c=(a+b)/2.0
-# c=c/(sum(sum(c)))
-# # print(sum(sum(c)))
-# d=np.array([[1,1,1],[2,2,2],[3,3,3]])
-# e=d.dot(d.T)
-# print ('e',e)
-# print ('c',c)
-# e*c
-# a
-# context_embed= model.context2vec(['cats',',','dogs',',','snakes','are','animals'],2 )
-# context_embed = context_embed / xp.sqrt((context_embed * context_embed).sum())
-# produce_top_n_simwords(context_embed=context_embed,index2word=index2word,w_filter=w,n_result=20)
-
-
-# In[47]:
+# In[14]:
 
 
 TOP_MUTUAL_SIM='top_mutual_sim'
+TOP_CLUSTER_DENSITY='top_cluster_density'
 LDA='lda'
 INVERSE_S_FREQ='inverse_s_freq'
 INVERSE_W_FREQ='inverse_w_q'
-WEIGHT_DICT={0:False,1:TOP_MUTUAL_SIM,2:LDA,3:INVERSE_S_FREQ,4:INVERSE_W_FREQ}
+WEIGHT_DICT={0:False,1:TOP_MUTUAL_SIM,2:LDA,3:INVERSE_S_FREQ,4:INVERSE_W_FREQ,5:TOP_CLUSTER_DENSITY}
 
 
 if __name__=="__main__":
@@ -334,7 +344,7 @@ if __name__=="__main__":
         
         data='./eval_data/data-chimeras/dataset.l4.fixed.test.txt.punct'
 
-        weight=WEIGHT_DICT[1]
+        weight=WEIGHT_DICT[5]
         
 #         ##context2vec
 ##         model_param_file='../models/context2vec/model_dir/context2vec.ukwac.model.params'
@@ -353,27 +363,35 @@ if __name__=="__main__":
 
 
 ####context2vec-skipgram
-#         model_param_file='../models/context2vec/model_dir/MODEL-wiki.params.14,../models/wiki_all.model/wiki_all.sent.split.model'
-        model_param_file='../models/context2vec/model_dir/context2vec.ukwac.model.params,../models/wiki_all.model/wiki_all.sent.split.model'
+        model_param_file='../models/context2vec/model_dir/MODEL-wiki.params.14?../models/wiki_all.model/wiki_all.sent.split.model'
+#         model_param_file='../models/context2vec/model_dir/context2vec.ukwac.model.params?../models/wiki_all.model/wiki_all.sent.split.model'
         model_type='context2vec-skipgram'
-        context_rm_stopw=0
+#         context_rm_stopw=0
+        n_result=20
     
     else:
-        if len(sys.argv) < 6:
-            print >> sys.stderr, "Usage: %s <model_param_file> <model_type> <weight:0:False,1:'top_mutual_sim',2:'lda',3:'inverse_s_freq',4:'inverse_w_freq'> <context_rm_stop> <eval_data> <w2salience>"  % (sys.argv[0])
+        if len(sys.argv) < 5:
+            print >> sys.stderr, "Usage: {0} <model_param_file> <model_type> <weight:{1}> <eval_data> <w2salience>"  .format (sys.argv[0],WEIGHT_DICT.items())
             sys.exit(1)
         
         model_param_file = sys.argv[1]
         model_type=sys.argv[2]
         
-        weight=WEIGHT_DICT[int(sys.argv[3])]
-        context_rm_stopw=int(sys.argv[4])
-        data =sys.argv[5]
-        if len(sys.argv)>6:
-            w2salience_f=argv[6]
+        if '-' in sys.argv[3]:
+            weight,n_result=sys.argv[3].split('-')
+            weight=WEIGHT_DICT[int(weight)]
+            n_result=int(n_result)
+        else:
+            weight=WEIGHT_DICT[int(sys.argv[3])]
+            n_result=20 #default is 20 top
+            
+#         context_rm_stopw=int(sys.argv[4])
+        data =sys.argv[4]
+        
+        if len(sys.argv)>5:
+            w2salience_f=argv[5]
         else:
             w2salience_f=None
-    
     
     #gpu setup 
     gpu = -1 # todo: make this work with gpu
@@ -401,6 +419,7 @@ if __name__=="__main__":
         w_target=None
         word2index_target=None
         index2word_target=None
+        context_rm_stopw=0
     elif model_type=='skipgram':
         model = gensim.models.Word2Vec.load(model_param_file)
         w=deepcopy(model.wv.vectors)
@@ -414,10 +433,10 @@ if __name__=="__main__":
         w_target=None
         word2index_target=None
         index2word_target=None
-        
+        context_rm_stopw=1
         
     elif model_type=='context2vec-skipgram':
-        model_param_context,model_param_w2v=model_param_file.split(',')
+        model_param_context,model_param_w2v=model_param_file.split('?')
         model_reader = ModelReader(model_param_context)
         w = model_reader.w
         index2word = model_reader.index2word
@@ -428,7 +447,7 @@ if __name__=="__main__":
         w_target=model_w2v.wv.vectors
         index2word_target=model_w2v.wv.index2word
         word2index_target={key: model_w2v.wv.vocab[key].index for key in model_w2v.wv.vocab}
-    
+        context_rm_stopw=0
     
     w2salience=None
     
@@ -440,9 +459,8 @@ if __name__=="__main__":
     
     #weight
 
-    if weight==TOP_MUTUAL_SIM:
-        n_result = 20
-    elif weight==LDA:
+#     if weight==TOP_MUTUAL_SIM of weight==TOP_CLUSTER_DENSITY:
+    if weight==LDA:
         print ('load vectors and entropy')
         w2salience=pickle.load(open(w2salience_f))
     elif weight==INVERSE_W_FREQ:
@@ -460,15 +478,17 @@ if __name__=="__main__":
         model=rm_stopw_context(model)
         
     
+    print (model_param_file,model_type,weight,context_rm_stopw,data,w2salience_f)
 
 
-# In[51]:
+# In[26]:
 
 
 #read in data
 # data='./eval_data/data-chimeras/dataset.l6.fixed.test.txt.punct'
 if data.split('/')[-2]== 'data-chimeras':
-#         weight=None
-        eval_chimera(data,model,model_type,20,w,index2word,weight,w2salience,w_target,word2index_target,index2word_target)
+#         weight=WEIGHT_DICT[5]
+#         print (weight)
+        eval_chimera(data,model,model_type,n_result,w,index2word,weight,w2salience,w_target,word2index_target,index2word_target)
         
 
