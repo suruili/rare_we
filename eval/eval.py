@@ -95,7 +95,7 @@ top_cluster_density(np.array([[1.,1.,1.],[4.,4.,4.]]),np.array([0.3,0.1]))
 # np.linalg.norm([0.57735027,0.57735027, 0.57735027])
 
 
-# In[27]:
+# In[20]:
 
 
 def load_w2salience(w2salience_f,weight_type):
@@ -326,7 +326,7 @@ def eval_chimera(chimeras_data_f,context_model,model_type,n_result,w,index2word,
         print ("AVERAGE RHO:",float(sum(spearmans))/float(len(spearmans)))
 
 
-# In[14]:
+# In[13]:
 
 
 TOP_MUTUAL_SIM='top_mutual_sim'
@@ -342,9 +342,9 @@ if __name__=="__main__":
     #params read in
     if sys.argv[0]=='/usr/local/lib/python2.7/dist-packages/ipykernel_launcher.py':
         
-        data='./eval_data/data-chimeras/dataset.l4.fixed.test.txt.punct'
+        data='./eval_data/data-chimeras/dataset.l2.fixed.test.txt.punct'
 
-        weight=WEIGHT_DICT[5]
+        weight=WEIGHT_DICT[0]
         
 #         ##context2vec
 ##         model_param_file='../models/context2vec/model_dir/context2vec.ukwac.model.params'
@@ -368,6 +368,7 @@ if __name__=="__main__":
         model_type='context2vec-skipgram'
 #         context_rm_stopw=0
         n_result=20
+        w2salience_f=None
     
     else:
         if len(sys.argv) < 5:
@@ -481,13 +482,13 @@ if __name__=="__main__":
     print (model_param_file,model_type,weight,context_rm_stopw,data,w2salience_f)
 
 
-# In[26]:
+# In[23]:
 
 
 #read in data
 # data='./eval_data/data-chimeras/dataset.l6.fixed.test.txt.punct'
 if data.split('/')[-2]== 'data-chimeras':
-#         weight=WEIGHT_DICT[5]
+#         weight=WEIGHT_DICT[1]
 #         print (weight)
         eval_chimera(data,model,model_type,n_result,w,index2word,weight,w2salience,w_target,word2index_target,index2word_target)
         
