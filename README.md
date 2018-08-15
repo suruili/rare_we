@@ -32,6 +32,8 @@
 
     model_type:
     
+        skipgram (context skipgram input vector without stop words)
+        
         context2vec (word embedding in context2vec space)
         
         context2vec-skipgram(context2vec substitutes in skipgram space)
