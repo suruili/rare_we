@@ -559,10 +559,8 @@ if __name__=="__main__":
 
 
 #read in data
-# data='./eval_data/data-chimeras/dataset.l2.fixed.test.txt.punct'
 if data.split('/')[-2]== 'data-chimeras':
-#         n_result=2
-#         print (weight)
+
         eval_chimera(data,model,model_type,n_result,w,index2word,word2index,weight,w2salience,w_target,word2index_target,index2word_target)
         
 
