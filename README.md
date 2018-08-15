@@ -1,10 +1,12 @@
 # rare_we
 
 1. requirements
+
     nvidia-docker
     nvidia-docker run  --name context2vec-rw -it -p 8887:8887 -v /home/ql261/rare_we/:/home/rare_we/ chainer/chainer:v4.0.0-python2-lq /bin/bash
 
 2. chimeras evaluation
+
     Usage:python eval.py <model_param_file> <model_type> <weight> <eval_data> <w2salience>
 
     example usage: 	nice python -u eval.py ../models/context2vec/model_dir/MODEL-wiki.params.6 context2vec 0 0 ./eval_data/data-chimeras/dataset.l2.fixed.test.txt.punct &> eval_context2vec_6_0_0_l2_punct.log &
