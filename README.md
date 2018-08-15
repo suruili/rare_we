@@ -32,5 +32,7 @@
 
     model_type:
         context2vec (word embedding in context2vec space)
-        context2vec-skipgram(context2vec substitutes in skipgram space); 
+        
+        context2vec-skipgram(context2vec substitutes in skipgram space)
+        
         context2vec-skipgram?skipgram (context2vec substitutes in skipgram space plus skipgram context words)
