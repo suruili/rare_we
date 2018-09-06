@@ -73,7 +73,7 @@ if __name__=="__main__":
     
     for root, subdir, fnames in os.walk(chimeras_data_dir):
         for fn in fnames:
-            if fn.endswith('fixed.train.txt'):
+            if fn.endswith('fixed.test.txt') or fn.endswith('fixed.train.txt'):
                 print (fn)
                 infos=fn.split('.')
                 sent_no=infos[1].upper()

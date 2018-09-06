@@ -18,6 +18,6 @@ fi
 
 for i in 2 4 6
 do
-nice python -u eval.py $model  $model_type $weight ./eval_data/data-chimeras/dataset.l${i}.${test_f} &> eval_${model_type}_${model_f_base}_${weight}_l${i}_${test_f}.log &
+nice python -u eval.py $model  $model_type $weight ./eval_data/data-chimeras/dataset_alacarte.l${i}.${test_f} &> eval_alacarte_${model_type}_${model_f_base}_${weight}_l${i}_${test_f}.log &
 done
 
