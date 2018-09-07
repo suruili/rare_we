@@ -684,9 +684,3 @@ elif data.split('/')[-2]== 'data-nonces':
         ranks=eval_nonce(data,model,model_w2v,model_type,n_result,w,index2word,word2index,weight,w2salience,w_target,word2index_target,index2word_target)
     
 
-
-# In[69]:
-
-
-np.linalg.norm(model_w2v['the'])
-
