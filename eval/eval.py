@@ -29,7 +29,7 @@ import collections
 
 
 
-# In[2]:
+# In[41]:
 
 
 def produce_top_n_simwords(w_filter,context_embed,n_result,index2word,debug=False):
@@ -45,22 +45,21 @@ def produce_top_n_simwords(w_filter,context_embed,n_result,index2word,debug=Fals
                     if xp.isnan(similarity[i]):
                         continue
                     if debug==True:
-                        print('{0}: {1}'.format(str(index2word[i]), str(similarity[i])))
+                        print('{0}: {1}'.format(str(index2word[int(i)]), str(similarity[int(i)])))
                     count += 1
-                    top_words_i.append(i)
-                    top_words.append(index2word[i])
-                    similarity_scores.append(similarity[i])
+                    top_words_i.append(int(i))
+                    top_words.append(index2word[int(i)])
+                    similarity_scores.append(float(similarity[int(i)]))
                     if count == n_result:
                         break
 
         top_vec=w_filter[top_words_i,:]
-        
-        return top_vec,np.array(similarity_scores),top_words
+        return top_vec,xp.array(similarity_scores),top_words
     
 def top_mutual_sim(top_vec,similarity_scores):
 
     #normalize the top_vec
-    s = np.sqrt((top_vec * top_vec).sum(1))
+    s = xp.sqrt((top_vec * top_vec).sum(1))
     s[s==0.] = 1.
     top_vec /= s.reshape((s.shape[0], 1))
     
@@ -76,7 +75,7 @@ def top_mutual_sim(top_vec,similarity_scores):
 
 def top_cluster_density(top_vec,similarity_scores):
     #normalize the top_vec
-    s = np.sqrt((top_vec * top_vec).sum(1))
+    s = xp.sqrt((top_vec * top_vec).sum(1))
     s[s==0.] = 1.
     top_vec = top_vec/ s.reshape((s.shape[0], 1))
     
@@ -89,7 +88,7 @@ def top_cluster_density(top_vec,similarity_scores):
     return inf_score
 
 
-# In[3]:
+# In[65]:
 
 
 def load_w2salience(w2salience_f,weight_type):
@@ -138,11 +137,10 @@ def lg_model_out_w2v(top_words,w_target,word2index_target):
         for i,word in enumerate(top_words):
             try :
                 top_vec.append(w_target[word2index_target[word]])
-                print ('target word substitute',w_target[word2index_target[word]][:10])
                 index_list.append(i)
             except KeyError as e:
                 print (e)
-        return np.array(top_vec),index_list
+        return xp.stack(top_vec),index_list
     
 def context_inform(test_s,test_w, model,model_type,n_result,w_filter,index2word,weight,w2entropy=None,w_target=None,word2index_target=None,index2word_target=None):
     #produce context representation and infromative score for each context
@@ -156,11 +154,10 @@ def context_inform(test_s,test_w, model,model_type,n_result,w_filter,index2word,
     # Decide on the model
     if model_type=='context2vec':
         context_embed= model.context2vec(words, pos)
-        context_embed_out=context_embed
-    
+        
     elif model_type=='skipgram':
         score,context_embed=skipgram_context(model,words,pos,weight,w2entropy)
-        context_embed_out=context_embed
+        context_embed_out=xp.array(context_embed)
         
     elif model_type=='context2vec-skipgram':
         # context2vec substitutes in skipgram space
@@ -168,16 +165,20 @@ def context_inform(test_s,test_w, model,model_type,n_result,w_filter,index2word,
         top_vec,sim_scores,top_words=produce_top_n_simwords(w_filter,context_embed,n_result,index2word)
         top_vec,index_list=lg_model_out_w2v(top_words,w_target,word2index_target) 
         sim_scores=sim_scores[index_list] #weighted by substitute probability
+        print (type(top_vec),type(sim_scores))
         if weight==SUBSTITUTE_PROB:
-            context_embed_out=sum(top_vec*sim_scores.reshape(len(sim_scores),1))
+            context_embed_out=xp.array(sum(top_vec*sim_scores.reshape(len(sim_scores),1)))
         else:
-            context_embed_out=sum(top_vec*((sim_scores/sum(sim_scores)).reshape(len(sim_scores),1)))
+            context_embed_out=xp.array(sum(top_vec*((sim_scores/sum(sim_scores)).reshape(len(sim_scores),1))))
+
     else:
         print ('model type {0} not recognized'.format(model_type))
         sys.exit(1)
         
     print('context_embed original', context_embed[:10])
     print ('context_embed_out',context_embed_out[:10])
+    print ('3',type(context_embed_out))
+
     #decide on weight per sentence
     print ('weight mode',weight)
     if weight==TOP_MUTUAL_SIM:
@@ -202,6 +203,7 @@ def context_inform(test_s,test_w, model,model_type,n_result,w_filter,index2word,
         score=score
     else:
         print ('weight mode {0} not recognized'.format(weight))
+
     return score,context_embed_out
 
 def additive_model(test_ss,test_w, model_type,model,n_result,w_filter,index2word,weight=False,w2entropy=None,w_target=None,word2index_target=None,index2word_target=None,f_w=None):
@@ -212,22 +214,21 @@ def additive_model(test_ss,test_w, model_type,model,n_result,w_filter,index2word
         test_s=test_s.strip()
         #produce context representation with scores
         score,context_embed=context_inform(test_s,test_w, model,model_type,n_result,w_filter,index2word,weight,w2entropy,w_target,word2index_target,index2word_target)
-        print ('weight is {0}'.format(score))
-        print ('context_embed is ', context_embed[:10])
         context_out.append(context_embed)
+        print ('context_embedtype',type(context_embed))
         context_weights.append(score)
     
     
     print ('context_weights',context_weights)
     #sum representation across contexts
-    context_out=np.array(context_out)
+    context_out=xp.stack(context_out)
     
     
     if model_type=='skipgram' or weight==SUBSTITUTE_PROB:
         # context representation by weighted sum of all context words in all contexts
         context_avg=sum(context_out)/sum(context_weights)
     else:
-        norm_weights=np.array(context_weights).reshape(len(context_weights),1)/float(sum(context_weights))
+        norm_weights=xp.array(context_weights).reshape(len(context_weights),1)/float(sum(context_weights))
         if f_w!=None:
             f_w.write(','.join([str(i[0]) for i in norm_weights])+'\n')
         print ('normalized weight: \n  {0}'.format(norm_weights))
@@ -239,11 +240,10 @@ def additive_model(test_ss,test_w, model_type,model,n_result,w_filter,index2word
 
     print('producing top {0} words for new embedding'.format(n_result))
     if index2word_target==None:
-        top_vec,scores,top_words=produce_top_n_simwords(w_filter,context_avg,n_result,index2word)
+        top_vec,scores,top_words=produce_top_n_simwords(w_filter,context_avg,n_result,index2word,debug=True)
     else:
         #print the target space neighbours for context2vec-skipgram
-        print (w_target.shape)
-        top_vec,scores,top_words=produce_top_n_simwords(w_target,context_avg,n_result,index2word_target)
+        top_vec,scores,top_words=produce_top_n_simwords(w_target,context_avg,n_result,index2word_target,debug=True)
     
     return context_avg
 
@@ -280,7 +280,7 @@ def rm_stopw_context(model):
 
 
 
-# In[5]:
+# In[94]:
 
 
 def preprocess_nonce(sent):
@@ -304,9 +304,8 @@ def eval_nonce(nonce_data_f,context_model,model_w2v,model_type,n_result,w,index2
         data=pd.read_csv(os.path.join(nonce_data_f),delimiter='\t',header=None,comment='#')
         c = 0
         for index, row in data.iterrows():
-#             if index<618:
-#                 continue
-            print (index)
+            if index>100 and index%100==0:
+                print (index)
             sents=preprocess_nonce(row[1])
             nonce=row[0]
             if nonce not in model_w2v:
@@ -320,7 +319,7 @@ def eval_nonce(nonce_data_f,context_model,model_w2v,model_type,n_result,w,index2
                     context_avg_2=additive_model(sents.lower(),'___', model_type.split('?')[1],context_model[1],n_result,w[1],index2word[1],weight[1],w2entropy[1],w_target[1],word2index_target[1],index2word_target[1])
                     print ('skipgram avg embed', context_avg_2[:10])
                     context_avg=(context_avg_1+context_avg_2)/2
-                    print ('context2vec avg skipgram', context_avg[:10])
+                    print ('context2vec avg out', context_avg[:10])
                     #compute probe embeddings in skipgram space
                     w_out=w[1]
                     w_target_out=w_target[1]
@@ -337,7 +336,8 @@ def eval_nonce(nonce_data_f,context_model,model_w2v,model_type,n_result,w,index2
                     word2index_target_out=word2index_target
             
 #             context_avg = context_avg / xp.sqrt((context_avg * context_avg).sum())
-
+            if xp==cuda.cupy:
+                context_avg=xp.asnumpy(context_avg)
             print ('vector norm: {0}'.format(np.linalg.norm(context_avg)))
             # MRR Rank calculation
             nns=model_w2v.similar_by_vector(context_avg,topn=len(model_w2v.wv.vocab))
@@ -374,6 +374,8 @@ def eval_chimera(chimeras_data_f,context_model,model_type,n_result,w,index2word,
         data=pd.read_csv(os.path.join(chimeras_data_f),delimiter='\t',header=None)
 
         for index, row in data.iterrows():
+            if index>100 and index%100==0:
+                print (index)
             golds=[]
             model_predict=[]
             probes=[]
@@ -386,7 +388,7 @@ def eval_chimera(chimeras_data_f,context_model,model_type,n_result,w,index2word,
                     context_avg_2=additive_model(row[1].lower(),'___', model_type.split('?')[1],context_model[1],n_result,w[1],index2word[1],weight[1],w2entropy[1],w_target[1],word2index_target[1],index2word_target[1],f_w)
                     print ('skipgram avg embed', context_avg_2[:10])
                     context_avg=(context_avg_1+context_avg_2)/2
-                    print ('context2vec avg skipgram', context_avg[:10])
+                    print ('context2vec avg out', context_avg[:10])
                     #compute probe embeddings in skipgram space
                     w_out=w[1]
                     w_target_out=w_target[1]
@@ -433,7 +435,7 @@ def eval_chimera(chimeras_data_f,context_model,model_type,n_result,w,index2word,
         print ("AVERAGE RHO:",float(sum(spearmans))/float(len(spearmans)))
 
 
-# In[9]:
+# In[92]:
 
 
 TOP_MUTUAL_SIM='top_mutual_sim'
@@ -453,36 +455,35 @@ if __name__=="__main__":
 #         data='./eval_data/data-chimeras/dataset.l2.fixed.test.txt.punct'
         data='./eval_data/data-nonces/n2v.definitional.dataset.train.txt'
         weight=WEIGHT_DICT[0]
-        gpu=-1
+        gpu=1
 #         ##context2vec
 ##         model_param_file='../models/context2vec/model_dir/context2vec.ukwac.model.params'
 #         model_param_file='../models/context2vec/model_dir/MODEL-wiki.params.14'
         
-#         model_type='context2vec'
+        model_type='skipgram'
 
 ####skipgram
-        model_param_file='../models/wiki_all.model/wiki_all.sent.split.model'
-        model_type='skipgram'
-#         weight='inverse_w_freq'
-#         w2salience_f='../corpora/corpora/wiki.all.utf8.sent.split.tokenized.vocab'
-#         w2salience_f='../models/lda/w2entropy'
-        n_result=20
-        w2salience_f=None
-
-####context2vec-skipgram
-#         model_param_file='../models/context2vec/model_dir/MODEL-wiki.params.14?../models/wiki_all.model/wiki_all.sent.split.model'
-# #         model_param_file='../models/context2vec/model_dir/context2vec.ukwac.model.params?../models/wiki_all.model/wiki_all.sent.split.model'
-#         model_type='context2vec-skipgram?skipgram'
-#         n_result=20
-#         w2salience_f=None
-
-# #####skipgram?context2vec-skipgram
-#         model_param_file='../models/context2vec/model_dir/MODEL-wiki.params.14?../models/wiki_all.model/wiki_all.sent.split.model'
-#         model_type='context2vec-skipgram?skipgram'
-# #         weight='inverse_w_freq'
-# #         w2salience_f='../corpora/corpora/wiki.all.utf8.sent.split.tokenized.vocab'
-# #         w2salience_f='../models/lda/w2entropy'
-#         n_result=20
+        if model_type=='skipgram':
+            model_param_file='../models/wiki_all.model/wiki_all.sent.split.model'
+            model_type='skipgram'
+    #         weight='inverse_w_freq'
+    #         w2salience_f='../corpora/corpora/wiki.all.utf8.sent.split.tokenized.vocab'
+    #         w2salience_f='../models/lda/w2entropy'
+            n_result=20
+            w2salience_f=None
+        elif model_type=='context2vec-skipgram?skipgram':
+            model_param_file='../models/context2vec/model_dir/MODEL-wiki.params.14?../models/wiki_all.model/wiki_all.sent.split.model'
+    #         model_param_file='../models/context2vec/model_dir/context2vec.ukwac.model.params?../models/wiki_all.model/wiki_all.sent.split.model'
+            n_result=20
+            w2salience_f=None
+        elif model_type=='skipgram?context2vec-skipgram':
+        #####skipgram?context2vec-skipgram
+            model_param_file='../models/context2vec/model_dir/MODEL-wiki.params.14?../models/wiki_all.model/wiki_all.sent.split.model'
+    #         weight='inverse_w_freq'
+    #         w2salience_f='../corpora/corpora/wiki.all.utf8.sent.split.tokenized.vocab'
+    #         w2salience_f='../models/lda/w2entropy'
+            n_result=20
+            w2salience_f=None
     
     else:
         if len(sys.argv) < 6:
@@ -528,8 +529,8 @@ if __name__=="__main__":
     if model_type=='context2vec':
         #read in model
         
-        model_reader = ModelReader(model_param_file)
-        w = model_reader.w
+        model_reader = ModelReader(model_param_file,gpu)
+        w = xp.array(model_reader.w)
         index2word = model_reader.index2word
         word2index=model_reader.word2index
         model = model_reader.model
@@ -539,9 +540,9 @@ if __name__=="__main__":
         
     elif model_type=='skipgram':
         model_w2v = gensim.models.Word2Vec.load(model_param_file)
-        w=deepcopy(model_w2v.wv.vectors)
+        w=xp.array(deepcopy(model_w2v.wv.vectors))
         #vector normalize for target w embedding, consistent with context2vec w and convenient for cosine computation among substitutes
-        s = np.sqrt((w * w).sum(1))
+        s = xp.sqrt((w * w).sum(1))
         s[s==0.] = 1.
         w /= s.reshape((s.shape[0], 1))
         
@@ -557,36 +558,36 @@ if __name__=="__main__":
         
     elif model_type=='context2vec-skipgram':
         model_param_context,model_param_w2v=model_param_file.split('?')
-        model_reader = ModelReader(model_param_context)
-        w = model_reader.w
+        model_reader = ModelReader(model_param_context,gpu)
+        w = xp.array(model_reader.w)
         index2word = model_reader.index2word
         word2index=model_reader.word2index
         model = model_reader.model
         
         model_w2v = gensim.models.Word2Vec.load(model_param_w2v)
-        w_target=model_w2v.wv.vectors
+        w_target=xp.array(model_w2v.wv.vectors)
         index2word_target=model_w2v.wv.index2word
         word2index_target={key: model_w2v.wv.vocab[key].index for key in model_w2v.wv.vocab}
     
     elif model_type=='context2vec-skipgram?skipgram':
         model_param_context,model_param_w2v=model_param_file.split('?')
         #context2vec-skipgram
-        model_reader = ModelReader(model_param_context)
-        w = model_reader.w
+        model_reader = ModelReader(model_param_context,gpu)
+        w = xp.array(model_reader.w)
         index2word = model_reader.index2word
         word2index =model_reader.word2index
         model = model_reader.model
         
         model_w2v = gensim.models.Word2Vec.load(model_param_w2v)
-        w_target=model_w2v.wv.vectors
+        w_target=xp.array(model_w2v.wv.vectors)
         index2word_target=model_w2v.wv.index2word
         word2index_target={key: model_w2v.wv.vocab[key].index for key in model_w2v.wv.vocab}
     
         # skigpram
         model_skipgram = model_w2v
-        w_skipgram=deepcopy(model_skipgram.wv.vectors)
+        w_skipgram=xp.array(deepcopy(model_skipgram.wv.vectors))
         #vector normalize for probe w embedding
-        s = np.sqrt((w_skipgram * w_skipgram).sum(1))
+        s = xp.sqrt((w_skipgram * w_skipgram).sum(1))
         s[s==0.] = 1.
         w_skipgram /= s.reshape((s.shape[0], 1))
         
@@ -603,7 +604,7 @@ if __name__=="__main__":
                 
         
     
-    #remove stop words in target word space
+    #remove stop words in target word space and asarray
     print ('filter words for target....')
     w,word2index,index2word=filter_w(w,word2index,index2word)
     if  index2word_target!=None:
@@ -640,14 +641,25 @@ if __name__=="__main__":
     print (model_param_file,model_type,weight,data,w2salience_f)
 
 
-# In[10]:
+# In[76]:
+
+
+xp.asnumpy(xp.array([1,2]))
+
+
+# In[93]:
 
 
 #read in data
+import time
+start_time = time.time()
+
+
 if data.split('/')[-2]== 'data-chimeras':
 
         eval_chimera(data,model,model_type,n_result,w,index2word,word2index,weight,w2salience,w_target,word2index_target,index2word_target)
 
 elif data.split('/')[-2]== 'data-nonces':
         ranks=eval_nonce(data,model,model_w2v,model_type,n_result,w,index2word,word2index,weight,w2salience,w_target,word2index_target,index2word_target)
+print("--- %s seconds ---" % (time.time() - start_time))
 
