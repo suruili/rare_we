@@ -15,6 +15,7 @@ sudo pip install -U scipy
 sudo pip install -U scikit-learn
 sudo pip install matplotlib
 sudo pip install nltk
+sudo pip install h5py
 sudo pip install --upgrade gensim
 # run jupyter
 cd /home/
