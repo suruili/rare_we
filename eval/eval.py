@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[54]:
+# In[1]:
 
 
 import numpy as np
@@ -29,7 +29,7 @@ import collections
 
 
 
-# In[25]:
+# In[2]:
 
 
 def produce_top_n_simwords(w_filter,context_embed,n_result,index2word,debug=False):
@@ -89,7 +89,7 @@ def top_cluster_density(top_vec,similarity_scores):
     return inf_score
 
 
-# In[19]:
+# In[3]:
 
 
 def load_w2salience(w2salience_f,weight_type):
@@ -250,7 +250,7 @@ def additive_model(test_ss,test_w, model_type,model,n_result,w_filter,index2word
 
 
 
-# In[27]:
+# In[4]:
 
 
 def filter_w(w,word2index,index2word):
@@ -280,7 +280,7 @@ def rm_stopw_context(model):
 
 
 
-# In[72]:
+# In[5]:
 
 
 def preprocess_nonce(sent):
@@ -295,7 +295,7 @@ def preprocess_nonce(sent):
         matches_mask=sorted(matches_mask, key=lambda x:x[0],reverse=True)
         for m in matches_mask:
             sent_masked=sent_masked[:m[0]]+sent_masked[m[1]:]
-        sents_out.append(sent_masked)
+        sents_out.append(sent_masked+' .')
     return ' @@ '.join(sents_out)
 
 def eval_nonce(nonce_data_f,context_model,model_w2v,model_type,n_result,w,index2word,word2index,weight=False,w2entropy=None,w_target=None,word2index_target=None,index2word_target=None):
@@ -304,6 +304,9 @@ def eval_nonce(nonce_data_f,context_model,model_w2v,model_type,n_result,w,index2
         data=pd.read_csv(os.path.join(nonce_data_f),delimiter='\t',header=None,comment='#')
         c = 0
         for index, row in data.iterrows():
+#             if index<618:
+#                 continue
+            print (index)
             sents=preprocess_nonce(row[1])
             nonce=row[0]
             if nonce not in model_w2v:
@@ -356,39 +359,9 @@ def eval_nonce(nonce_data_f,context_model,model_w2v,model_type,n_result,w,index2
             c+=1
         print ("Final MRR: ",mrr,c,float(mrr)/float(c))
 
-#         bins = np.linspace(0,len(model_w2v.wv.vocab),40)
-#         print bins
-#         binned = np.digitize(ranks, bins)
-#         print collections.Counter(binned)
         print ('mediam : {0}'.format(np.median(ranks)))
         return ranks
             
-#             #cosine similarity with probe embedding
-#             for gold,probe in zip(row[3].split(','),row[2].split(',')):
-#                 try:
-#                     if word2index_target_out==None:
-#                         probe_w_vec=xp.array(w_out[word2index_out[probe]])
-#                     else:
-#                         probe_w_vec=xp.array(w_target_out[word2index_target_out[probe]])
-#                     probe_w_vec=probe_w_vec/xp.sqrt((probe_w_vec*probe_w_vec).sum())
-#                     cos=probe_w_vec.dot(context_avg)
-#                     if xp.isnan(cos):
-#                         continue
-#                     else:
-#                         model_predict.append(cos)
-#                         golds.append(gold)
-#                         probes.append(probe)
-#                 except KeyError as e:
-#                     print ("====warning key error for probe=====: {0}".format(e))
-#             print ('probes',probes)
-#             print ('gold',golds)
-#             print ('model_predict',model_predict)
-#             sp=spearmanr(golds,model_predict)[0]
-#             print ('spearman correlation is {0}'.format(sp))
-#             if not math.isnan(sp):
-#                 spearmans.append(sp)
-#         print ("AVERAGE RHO:",float(sum(spearmans))/float(len(spearmans)))
-        
 
 
 def eval_chimera(chimeras_data_f,context_model,model_type,n_result,w,index2word,word2index,weight=False,w2entropy=None,w_target=None,word2index_target=None,index2word_target=None):
@@ -460,7 +433,7 @@ def eval_chimera(chimeras_data_f,context_model,model_type,n_result,w,index2word,
         print ("AVERAGE RHO:",float(sum(spearmans))/float(len(spearmans)))
 
 
-# In[62]:
+# In[9]:
 
 
 TOP_MUTUAL_SIM='top_mutual_sim'
@@ -478,9 +451,9 @@ if __name__=="__main__":
     if sys.argv[0]=='/usr/local/lib/python2.7/dist-packages/ipykernel_launcher.py':
         
 #         data='./eval_data/data-chimeras/dataset.l2.fixed.test.txt.punct'
-        data='./eval_data/data-nonces/n2v.definitional.dataset.test.txt'
+        data='./eval_data/data-nonces/n2v.definitional.dataset.train.txt'
         weight=WEIGHT_DICT[0]
-        
+        gpu=-1
 #         ##context2vec
 ##         model_param_file='../models/context2vec/model_dir/context2vec.ukwac.model.params'
 #         model_param_file='../models/context2vec/model_dir/MODEL-wiki.params.14'
@@ -494,7 +467,7 @@ if __name__=="__main__":
 #         w2salience_f='../corpora/corpora/wiki.all.utf8.sent.split.tokenized.vocab'
 #         w2salience_f='../models/lda/w2entropy'
         n_result=20
-
+        w2salience_f=None
 
 ####context2vec-skipgram
 #         model_param_file='../models/context2vec/model_dir/MODEL-wiki.params.14?../models/wiki_all.model/wiki_all.sent.split.model'
@@ -512,8 +485,8 @@ if __name__=="__main__":
 #         n_result=20
     
     else:
-        if len(sys.argv) < 5:
-            print >> sys.stderr, "Usage: {0} <model_param_file> <model_type: context2vec; context2vec-skipgram (context2vec substitutes in skipgram space); context2vec-skipgram?skipgram (context2vec substitutes in skipgram space plus skipgram context words)> <weight:{1}> <eval_data> <w2salience>"  .format (sys.argv[0],WEIGHT_DICT.items())
+        if len(sys.argv) < 6:
+            print >> sys.stderr, "Usage: {0} <model_param_file> <model_type: context2vec; context2vec-skipgram (context2vec substitutes in skipgram space); context2vec-skipgram?skipgram (context2vec substitutes in skipgram space plus skipgram context words)> <weight:{1}> <eval_data> <gpu> <w2salience> "  .format (sys.argv[0],WEIGHT_DICT.items())
             sys.exit(1)
         
         model_param_file = sys.argv[1]
@@ -530,13 +503,15 @@ if __name__=="__main__":
 #         context_rm_stopw=int(sys.argv[4])
         data =sys.argv[4]
         
-        if len(sys.argv)>5:
-            w2salience_f=argv[5]
+        gpu=int(sys.argv[5])
+        
+        if len(sys.argv)>6:
+            w2salience_f=argv[6]
         else:
             w2salience_f=None
     
     #gpu setup 
-    gpu = -1 # todo: make this work with gpu
+   
 
     if gpu >= 0:
         cuda.check_cuda_available()
@@ -665,22 +640,14 @@ if __name__=="__main__":
     print (model_param_file,model_type,weight,data,w2salience_f)
 
 
-# In[41]:
-
-
-
-# model_w2v.most_similar('hey')
-
-
-# In[73]:
+# In[10]:
 
 
 #read in data
 if data.split('/')[-2]== 'data-chimeras':
 
         eval_chimera(data,model,model_type,n_result,w,index2word,word2index,weight,w2salience,w_target,word2index_target,index2word_target)
-    
+
 elif data.split('/')[-2]== 'data-nonces':
         ranks=eval_nonce(data,model,model_w2v,model_type,n_result,w,index2word,word2index,weight,w2salience,w_target,word2index_target,index2word_target)
-    
 
