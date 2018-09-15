@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[1]:
+# In[138]:
 
 
 import numpy as np
@@ -26,7 +26,16 @@ from nltk.corpus import stopwords
 import gensim
 import math
 import collections
+import argparse
 
+
+# In[105]:
+
+
+# from sklearn.preprocessing import normalize
+# a=np.array([1.23,2.232,3.2])
+# print(a/np.sqrt((a*a).sum()))
+# print (normalize([a]))
 
 
 # In[41]:
@@ -88,7 +97,7 @@ def top_cluster_density(top_vec,similarity_scores):
     return inf_score
 
 
-# In[65]:
+# In[133]:
 
 
 def load_w2salience(w2salience_f,weight_type):
@@ -210,7 +219,7 @@ def additive_model(test_ss,test_w, model_type,model,n_result,w_filter,index2word
     #produce context representation across contexts using weighted average
     context_out=[]
     context_weights=[]
-    for test_s in test_ss.split('@@'):
+    for test_s in test_ss:
         test_s=test_s.strip()
         #produce context representation with scores
         score,context_embed=context_inform(test_s,test_w, model,model_type,n_result,w_filter,index2word,weight,w2entropy,w_target,word2index_target,index2word_target)
@@ -250,7 +259,7 @@ def additive_model(test_ss,test_w, model_type,model,n_result,w_filter,index2word
 
 
 
-# In[4]:
+# In[134]:
 
 
 def filter_w(w,word2index,index2word):
@@ -280,13 +289,14 @@ def rm_stopw_context(model):
 
 
 
-# In[94]:
+# In[135]:
 
 
 def preprocess_nonce(sent):
     
     sents_out=[]
     
+    sent=sent.lower()
     results=re.finditer('___ ',sent)
     matches=[m for m in results]
     for i in range(len(matches)):
@@ -296,7 +306,7 @@ def preprocess_nonce(sent):
         for m in matches_mask:
             sent_masked=sent_masked[:m[0]]+sent_masked[m[1]:]
         sents_out.append(sent_masked+' .')
-    return ' @@ '.join(sents_out)
+    return sents_out
 
 def eval_nonce(nonce_data_f,context_model,model_w2v,model_type,n_result,w,index2word,word2index,weight=False,w2entropy=None,w_target=None,word2index_target=None,index2word_target=None):
         ranks = []
@@ -314,9 +324,9 @@ def eval_nonce(nonce_data_f,context_model,model_w2v,model_type,n_result,w,index2
             #compute context representation
             if model_type=='context2vec-skipgram?skipgram':
                     #context2vevc                
-                    context_avg_1=additive_model(sents.lower(),'___', model_type.split('?')[0],context_model[0],n_result,w[0],index2word[0],weight[0],w2entropy[0],w_target[0],word2index_target[0],index2word_target[0])
+                    context_avg_1=additive_model(sents,'___', model_type.split('?')[0],context_model[0],n_result,w[0],index2word[0],weight[0],w2entropy[0],w_target[0],word2index_target[0],index2word_target[0])
                     print ('context2vec avg embed',context_avg_1[:10])
-                    context_avg_2=additive_model(sents.lower(),'___', model_type.split('?')[1],context_model[1],n_result,w[1],index2word[1],weight[1],w2entropy[1],w_target[1],word2index_target[1],index2word_target[1])
+                    context_avg_2=additive_model(sents,'___', model_type.split('?')[1],context_model[1],n_result,w[1],index2word[1],weight[1],w2entropy[1],w_target[1],word2index_target[1],index2word_target[1])
                     print ('skipgram avg embed', context_avg_2[:10])
                     context_avg=(context_avg_1+context_avg_2)/2
                     print ('context2vec avg out', context_avg[:10])
@@ -328,17 +338,18 @@ def eval_nonce(nonce_data_f,context_model,model_w2v,model_type,n_result,w,index2
                     
             else:
                     
-                    context_avg=additive_model(sents.lower(),'___', model_type,context_model,n_result,w,index2word,weight,w2entropy,w_target,word2index_target,index2word_target)
+                    context_avg=additive_model(sents,'___', model_type,context_model,n_result,w,index2word,weight,w2entropy,w_target,word2index_target,index2word_target)
                     print ('context avg out', context_avg[:10])
                     w_out=w
                     w_target_out=w_target
                     word2index_out=word2index
                     word2index_target_out=word2index_target
             
-#             context_avg = context_avg / xp.sqrt((context_avg * context_avg).sum())
             if xp==cuda.cupy:
                 context_avg=xp.asnumpy(context_avg)
             print ('vector norm: {0}'.format(np.linalg.norm(context_avg)))
+            
+            
             # MRR Rank calculation
             nns=model_w2v.similar_by_vector(context_avg,topn=len(model_w2v.wv.vocab))
 
@@ -380,12 +391,12 @@ def eval_chimera(chimeras_data_f,context_model,model_type,n_result,w,index2word,
             model_predict=[]
             probes=[]
             #compute context representation
+            sents=row[1].lower().split('@@')
             if model_type=='context2vec-skipgram?skipgram':
                     #context2vevc
-                    
-                    context_avg_1=additive_model(row[1].lower(),'___', model_type.split('?')[0],context_model[0],n_result,w[0],index2word[0],weight[0],w2entropy[0],w_target[0],word2index_target[0],index2word_target[0],f_w)
+                    context_avg_1=additive_model(sents,'___', model_type.split('?')[0],context_model[0],n_result,w[0],index2word[0],weight[0],w2entropy[0],w_target[0],word2index_target[0],index2word_target[0],f_w)
                     print ('context2vec avg embed',context_avg_1[:10])
-                    context_avg_2=additive_model(row[1].lower(),'___', model_type.split('?')[1],context_model[1],n_result,w[1],index2word[1],weight[1],w2entropy[1],w_target[1],word2index_target[1],index2word_target[1],f_w)
+                    context_avg_2=additive_model(sents,'___', model_type.split('?')[1],context_model[1],n_result,w[1],index2word[1],weight[1],w2entropy[1],w_target[1],word2index_target[1],index2word_target[1],f_w)
                     print ('skipgram avg embed', context_avg_2[:10])
                     context_avg=(context_avg_1+context_avg_2)/2
                     print ('context2vec avg out', context_avg[:10])
@@ -396,8 +407,8 @@ def eval_chimera(chimeras_data_f,context_model,model_type,n_result,w,index2word,
                     word2index_target_out=word2index_target[1]
                     
             else:
-                    
-                    context_avg=additive_model(f_w,row[1].lower(),'___', model_type,context_model,n_result,w,index2word,weight,w2entropy,w_target,word2index_target,index2word_target)
+
+                    context_avg=additive_model(sents,'___', model_type,context_model,n_result,w,index2word,weight,w2entropy,w_target,word2index_target,index2word_target,f_w)
                     print ('context avg out', context_avg[:10])
                     w_out=w
                     w_target_out=w_target
@@ -412,12 +423,12 @@ def eval_chimera(chimeras_data_f,context_model,model_type,n_result,w,index2word,
             for gold,probe in zip(row[3].split(','),row[2].split(',')):
                 try:
                     if word2index_target_out==None:
-                        probe_w_vec=xp.array(w_out[word2index_out[probe]])
+                        probe_w_vec=w_out[word2index_out[probe]]
                     else:
-                        probe_w_vec=xp.array(w_target_out[word2index_target_out[probe]])
+                        probe_w_vec=w_target_out[word2index_target_out[probe]]
                     probe_w_vec=probe_w_vec/xp.sqrt((probe_w_vec*probe_w_vec).sum())
-                    cos=probe_w_vec.dot(context_avg)
-                    if xp.isnan(cos):
+                    cos=float(probe_w_vec.dot(context_avg))
+                    if np.isnan(cos):
                         continue
                     else:
                         model_predict.append(cos)
@@ -435,7 +446,7 @@ def eval_chimera(chimeras_data_f,context_model,model_type,n_result,w,index2word,
         print ("AVERAGE RHO:",float(sum(spearmans))/float(len(spearmans)))
 
 
-# In[92]:
+# In[139]:
 
 
 TOP_MUTUAL_SIM='top_mutual_sim'
@@ -452,15 +463,15 @@ if __name__=="__main__":
     #params read in
     if sys.argv[0]=='/usr/local/lib/python2.7/dist-packages/ipykernel_launcher.py':
         
-#         data='./eval_data/data-chimeras/dataset.l2.fixed.test.txt.punct'
-        data='./eval_data/data-nonces/n2v.definitional.dataset.train.txt'
+        data='./eval_data/data-chimeras/dataset.l2.fixed.test.txt.punct'
+#         data='./eval_data/data-nonces/n2v.definitional.dataset.train.txt'
         weight=WEIGHT_DICT[0]
         gpu=1
 #         ##context2vec
 ##         model_param_file='../models/context2vec/model_dir/context2vec.ukwac.model.params'
 #         model_param_file='../models/context2vec/model_dir/MODEL-wiki.params.14'
         
-        model_type='skipgram'
+        model_type='context2vec-skipgram'
 
 ####skipgram
         if model_type=='skipgram':
@@ -471,7 +482,7 @@ if __name__=="__main__":
     #         w2salience_f='../models/lda/w2entropy'
             n_result=20
             w2salience_f=None
-        elif model_type=='context2vec-skipgram?skipgram':
+        elif model_type=='context2vec-skipgram':
             model_param_file='../models/context2vec/model_dir/MODEL-wiki.params.14?../models/wiki_all.model/wiki_all.sent.split.model'
     #         model_param_file='../models/context2vec/model_dir/context2vec.ukwac.model.params?../models/wiki_all.model/wiki_all.sent.split.model'
             n_result=20
@@ -486,30 +497,39 @@ if __name__=="__main__":
             w2salience_f=None
     
     else:
-        if len(sys.argv) < 6:
-            print >> sys.stderr, "Usage: {0} <model_param_file> <model_type: context2vec; context2vec-skipgram (context2vec substitutes in skipgram space); context2vec-skipgram?skipgram (context2vec substitutes in skipgram space plus skipgram context words)> <weight:{1}> <eval_data> <gpu> <w2salience> "  .format (sys.argv[0],WEIGHT_DICT.items())
-            sys.exit(1)
         
-        model_param_file = sys.argv[1]
-        model_type=sys.argv[2]
+
+        parser = argparse.ArgumentParser(description='Process some integers.')
+        parser.add_argument('--f',  type=str,
+                            help='model_param_file',dest='model_param_file')
+        parser.add_argument('--m', dest='model_type', type=str,
+                            help='<model_type: context2vec; context2vec-skipgram (context2vec substitutes in skipgram space); context2vec-skipgram?skipgram (context2vec substitutes in skipgram space plus skipgram context words)>')
+        parser.add_argument('--w', dest='weight', type=str, help='<weight:{0}>'.format (sys.argv[0],WEIGHT_DICT.items()))       
+        parser.add_argument('--d', dest='data', type=str, help='data file')
+        parser.add_argument('--g', dest='gpu',type=int, default=-1,help='gpu, default is -1')
+        parser.add_argument('--ws', dest='w2salience_f',type=str, default=None,help='word2salience file, optional')
+
+        args = parser.parse_args()
         
-        if '-' in sys.argv[3]:
-            weight,n_result=sys.argv[3].split('-')
+#         if len(sys.argv) < 6:
+#             print >> sys.stderr, "Usage: {0} <model_param_file> <model_type: context2vec; context2vec-skipgram (context2vec substitutes in skipgram space); context2vec-skipgram?skipgram (context2vec substitutes in skipgram space plus skipgram context words)> <weight:{1}> <eval_data> <gpu> <w2salience> "  .format (sys.argv[0],WEIGHT_DICT.items())
+#             sys.exit(1)
+        
+        model_param_file = args.model_param_file
+        model_type=args.model_type
+        
+        if '-' in args.weight:
+            weight,n_result=args.weight.split('-')
             weight=WEIGHT_DICT[int(weight)]
             n_result=int(n_result)
         else:
-            weight=WEIGHT_DICT[int(sys.argv[3])]
+            weight=WEIGHT_DICT[int(args.weight)]
             n_result=20 #default is 20 top
             
-#         context_rm_stopw=int(sys.argv[4])
-        data =sys.argv[4]
-        
-        gpu=int(sys.argv[5])
-        
-        if len(sys.argv)>6:
-            w2salience_f=argv[6]
-        else:
-            w2salience_f=None
+        data =args.data
+        gpu=args.gpu
+        w2salience_f=args.w2salience_f
+       
     
     #gpu setup 
    
@@ -641,13 +661,7 @@ if __name__=="__main__":
     print (model_param_file,model_type,weight,data,w2salience_f)
 
 
-# In[76]:
-
-
-xp.asnumpy(xp.array([1,2]))
-
-
-# In[93]:
+# In[136]:
 
 
 #read in data
