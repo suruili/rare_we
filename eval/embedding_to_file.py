@@ -22,103 +22,59 @@ from collections import defaultdict
 # In[2]:
 
 
-# class SentGenerator(defaultdict):
-#     def __init__ (self,item_type,batchsize):
-#         super(SentGenerator, self).__init__(item_type)
-#         self.batchsize=batchsize
-#         self.sent_ls=[]
-#     def sent_generator(self,a_list):
-        
-#             for i in a_list:
-#                 yield i
-                
-#     def convert_to_generator(self,batchsize):
-#         self.sent_ls=[]
-#         for sent_l in self:
-#             repeat=int(math.ceil(float(len(self[sent_l]))/self.batchsize))
-#             self.sent_ls+=[sent_l]*repeat
-#             self[sent_l]=self.sent_generator(self[sent_l])
-#         np.random.seed(1034)
-#         np.random.shuffle(self.sent_ls) 
-        
-# def batch_data(line_list,batchsize):
-#     sent_l2line_is=SentGenerator(list,batchsize)
-#     for line_i,line in enumerate(line_list):
-# #         print (list(line))
-#         sent_l=len(list(line))
-#         sent_l2line_is[sent_l].append(line_i)
-# #     print (sent_l2line_is.keys())
-#     sent_l2line_is.convert_to_generator(batchsize)
-#     return sent_l2line_is
+def increment_write_h5py(hf,chunk,data_name='data'):
+    if data_name not in hf:
+        maxshape = (None,) + chunk.shape[1:]
+        data=hf.create_dataset(data_name,data=chunk,chunks=chunk.shape,maxshape=maxshape,compression="gzip",compression_opts=9)
 
-#  def read_batch(f1,line_i,batchsize, word2index1):        
-#     batch = []
-#     line_inds=[]
-#     while len(batch) < batchsize:
-#         try:
-#             line1=next(f1)
-            
-#         except StopIteration:
-#             print ('{0} completed'.format(f1))
-#             return batch,line_inds
-#         if not line1: break
-#         sent_words1 = list(line1)
-# #         print (sent_words1)
-#         sent_inds1 = []
-#         for word in sent_words1:
-# #             print (word)
-#             word= word.encode('utf-8')
-#             if word in word2index1:
-                
-#                 ind = word2index1[word]
-#             else:
-#                 ind = word2index1['<UNK>']
-#             sent_inds1.append(ind)
-        
-#         batch.append(sent_inds1)
-#         line_inds.append(line_i)
-#     return batch,line_inds
-
-#  def next_batch(sent_l2line_is,simp_lines,batchsize):
-    
-#     for sent_l in sent_l2line_is.sent_ls:
-#         sent_arr,line_inds=read_batch(sent_l2line_is[sent_l],simp_lines,batchsize,mr.word2index1)
-#         if sent_arr==[]:
-#             continue
-#         else:
-#             yield xp.array(sent_arr),line_inds
-# # sent_ys = self._contexts_rep(sent_arr)
+    else:
+        data=hf[data_name]
+        data.resize((chunk.shape[0]+data.shape[0],)+data.shape[1:])
+        data[-chunk.shape[0]:]=chunk
 
 
-# In[23]:
+
+# In[11]:
 
 
 
 
 class context2vec_batch_generator(object):
     
-    def __init__(self,batchsize,model,word2index):
+    def __init__(self,batchsize,model,word2index,output_f):
         self.same_len_dict=defaultdict(list)
+        self.same_len_2_index=defaultdict(lambda:-1)
         self.batchsize=batchsize
         self.model=model
         self.word2index=word2index
-
+        self.output_f=output_f
         
-    def process_batch(self,line):
-        w_lst=line.strip().split()
+    def process_batch(self,w_lst):
         sent_len=len(w_lst)
         w_ind_lst=self.sent2wordid(w_lst)
         self.same_len_dict[sent_len].append(w_ind_lst)
+        self.same_len_2_index[sent_len]+=1
         if len(self.same_len_dict[sent_len])>=self.batchsize: #process batches
-            #run model
-            print ('run model')
+            #run model for a batch
+            print ('run model for sent len {0}'.format(str(sent_len)))
+            self.model.reset_state()
+            sent_ys = self.model._contexts_rep(xp.array(self.same_len_dict[sent_len]))
+            sent_ys=xp.array([arr.data for arr in sent_ys]).swapaxes(0,1)
+            #write to h5py
+            increment_write_h5py(self.output_f,sent_ys,data_name=str(len(w_lst)))
             self.same_len_dict[sent_len]=[]
+    
     def process_remainder(self):
         for sent_len in self.same_len_dict:
             if self.same_len_dict[sent_len]!=[]:
-                print ('remainder run_model')
+                print ('remainder run_model for sent leng {0}'.format(str(sent_len)))
+                self.model.reset_state()
+                sent_ys = self.model._contexts_rep(xp.array(self.same_len_dict[sent_len]))
+                sent_ys=xp.array([arr.data for arr in sent_ys]).swapaxes(0,1)
+                #write to h5py
+                increment_write_h5py(self.output_f,sent_ys,data_name=str(sent_len))
                 self.same_len_dict[sent_len]=[]
-    
+                
     #helper functions
     def sent2wordid(self,w_lst):
         sent_inds = []
@@ -133,7 +89,7 @@ class context2vec_batch_generator(object):
         return sent_inds
 
 
-# In[13]:
+# In[5]:
 
 
 if __name__ == '__main__':
@@ -143,28 +99,60 @@ if __name__ == '__main__':
     if sys.argv[0]=='/usr/local/lib/python2.7/dist-packages/ipykernel_launcher.py':
         model_param_file='../models/context2vec/model_dir/MODEL-wiki.params.14'
         gpu=-1
-        
+        text_f='eval_data/CRW/context'
+        batchsize=100
+
+    else:
+        parser = argparse.ArgumentParser(description='Write context2vec embeddings to file.')
+        parser.add_argument('--f',  type=str,
+                            help='model_param_file',dest='model_param_file')
+        parser.add_argument('--g', dest='gpu',type=int, default=-1,help='gpu, default is -1')
+        parser.add_argument('--t', dest='text_f', type=str, help='data text file or folder')
+        parser.add_argument('--b',dest='batchsize',type=int,help='batch size')
+        args = parser.parse_args()
+        model_param_file=args.model_param_file
+        text_f=args.text_f
+        gpu=args.gpu
+        batchsize=args.batchsize
+
     #1.setup
     if gpu >= 0:
             cuda.check_cuda_available()
             cuda.get_device(gpu).use()    
     xp = cuda.cupy if gpu >= 0 else np
-    #2. initialize the batchgenerator with context2vec model 
+    
+    #2. initialize context2vec model 
     model_reader = ModelReader(model_param_file,gpu)
-#     index2word = model_reader.index2word
     word2index=model_reader.word2index
     model = model_reader.model
    
 
 
-# In[24]:
+# In[16]:
 
 
-batchsize=252
-bg=context2vec_batch_generator(batchsize,model,word2index)
-for root, subdir, files in os.walk('eval_data/CRW/context/'):
-    for f in files:
-        for line in open(os.path.join(root,f)):
-            bg.process_batch(line)
-bg.process_remainder()
+#3. process context2vec text into vectors and store in h5py
+output_f = h5py.File(text_f+'_'+model_param_file.split('/')[-1]+'.'+'vec.h5', 'w')
+bg=context2vec_batch_generator(batchsize,model,word2index,output_f)
+index_out_f=open(text_f+'_'+model_param_file.split('/')[-1]+'.'+'index','w')
+
+if os.path.isdir(text_f):
+    index_out=defaultdict(list)
+    for root, subdir, files in os.walk(text_f):
+        for f in files:
+            name=f.split('.')[0]
+            for line in open(os.path.join(root,f)):
+                #read in one line at once and batch sentences
+                w_lst=line.strip().split()
+                bg.process_batch(w_lst) # process batch and write to h5py          
+                index_in_h5py=bg.same_len_2_index[len(w_lst)]
+                index_out[name].append(str(len(w_lst))+','+str(index_in_h5py))         
+    bg.process_remainder()
+            
+    #write indexes
+    for name in index_out:
+        index_out_f.write('{0}:::{1}'.format(name,'\t'.join(index_out[name])))
+
+index_out_f.close()
+output_f.close()
 
