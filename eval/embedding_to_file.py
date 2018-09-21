@@ -151,7 +151,7 @@ if os.path.isdir(text_f):
             
     #write indexes
     for name in index_out:
-        index_out_f.write('{0}:::{1}'.format(name,'\t'.join(index_out[name])))
+        index_out_f.write('{0}:::{1}\n'.format(name,'\t'.join(index_out[name])))
 
 index_out_f.close()
 output_f.close()
