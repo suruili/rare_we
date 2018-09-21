@@ -1,26 +1,15 @@
 
 # coding: utf-8
 
-# In[18]:
-
-
-# from collections import Counter,defaultdict
-# word_counts=defaultdict(lambda: [0, 0])
-# word_counts['a'][0]+=1
-# word_counts['b'][0]=5
-# sorted(word_counts.items(), key=lambda x:x[1][0],reverse=True)
-
-
 # In[13]:
 
 
 import sys
-import nltk
-# from nltk.tokenize import sent_tokenize
 import codecs
 from collections import Counter,defaultdict
 
 def tokenize_vocab(corpus_out):
+    sent_total=0
     word_counts=defaultdict(lambda: [0, 0])
     with codecs.open (corpus_out, 'w',encoding='utf-8') as f_out:
         #first pass
@@ -39,14 +28,15 @@ def tokenize_vocab(corpus_out):
                     word_counts[w][1]+=1
 
             f_out.write(line+'\n')
-                
+            sent_total+=1
             if counter%10000==0 and counter>=10000:
                 print ('{0} '.format(counter)),
             counter+=1
-    return word_counts
+    return word_counts,sent_total
        
-def write_to_vocab(vocab_fn,word_count):
+def write_to_vocab(vocab_fn,word_count,sent_total):
     with codecs.open(vocab_fn,encoding='utf-8',mode='w') as vocab_f:
+            vocab_f.write('sentence total:{0}\n'.format(str(sent_total)))
             w_id=0
             word_counts_most_common_w=sorted(word_count.items(), key=lambda x:x[1][0],reverse=True)
             for w, counts in word_counts_most_common_w:
@@ -55,11 +45,11 @@ def write_to_vocab(vocab_fn,word_count):
                 word2id[w]=w_id
                 id2word[w_id]=w
                 w_id+=1
+            
            
     return word2id,id2word
 
 if __name__=="__main__":
-#     nltk.download('punkt')
     word_context_matrix=defaultdict(lambda: Counter())
     context_max=int(sys.argv[2])
     target_max=int(sys.argv[3])
@@ -74,19 +64,10 @@ if __name__=="__main__":
     w_c_fn=corpus_dir+'.tokenized.context'
     with codecs.open (corpus_dir,encoding='utf-8') as f:
         print ('===first pass====')
-        word_count=tokenize_vocab(corpus_out)
-        word2id,id2word=write_to_vocab(vocab_fn,word_count)
-        word_count=''
+        word_count,sent_total=tokenize_vocab(corpus_out)
+        word2id,id2word=write_to_vocab(vocab_fn,word_count,sent_total)
+#         word_count=''
         
-#                     for c_w in ws:
-#                         if c_w !=w:
-#                             word_context_matrix[w][c_w]+=1
-                
-                                
-        #filter target and contexg words
-#         target_w_freq=word_counts.most_common()[:20000]
-#         target_w=zip(*target_w_freq)[0]
-#         context_w=zip(*target_w_freq[:5000])[0]
                 
         #second pass
     if context_max!=0 and target_max!=0:
@@ -110,8 +91,6 @@ if __name__=="__main__":
                                 word_context_matrix[w][c_w]+=1
 
 
-
-
         with codecs.open(w_c_fn,encoding='utf-8',mode='w') as w_c_f:
             for i in range(min(target_max,len(id2word))):
                 w=id2word[i]
@@ -121,14 +100,4 @@ if __name__=="__main__":
 
             
         
-
-
-# In[3]:
-
-
-# from collections import Counter
-# a=Counter()
-# a['a']+=1
-# a['b']+=1
-# zip(*a.most_common())
 
