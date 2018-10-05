@@ -1,12 +1,20 @@
 
 # coding: utf-8
 
-# In[13]:
+# In[7]:
 
 
 import sys
 import codecs
 from collections import Counter,defaultdict
+import nltk
+nltk.download('punkt')
+from nltk import sent_tokenize
+
+
+
+# In[1]:
+
 
 def tokenize_vocab(corpus_out):
     sent_total=0
@@ -17,21 +25,23 @@ def tokenize_vocab(corpus_out):
         for line in f:
             
             line=line.strip().lower()
-            if line=='':
-                    continue
-            bgw_per_sent={}
-            ws=line.split()
-            for w in ws:
-                word_counts[w][0]+=1
-                if w not in bgw_per_sent:
-                    bgw_per_sent[w]=1
-                    word_counts[w][1]+=1
+            for sent in sent_tokenize(line):
+                if sent=='':
+                        continue
+                ws=nltk.word_tokenize(sent)
+                sent=' '.join(ws)
+                bgw_per_sent={}
+                for w in ws:
+                    word_counts[w][0]+=1
+                    if w not in bgw_per_sent:
+                        bgw_per_sent[w]=1
+                        word_counts[w][1]+=1
 
-            f_out.write(line+'\n')
-            sent_total+=1
-            if counter%10000==0 and counter>=10000:
-                print ('{0} '.format(counter)),
-            counter+=1
+                f_out.write(sent+'\n')
+                sent_total+=1
+                if counter%10000==0 and counter>=10000:
+                    print ('{0} '.format(counter)),
+                counter+=1
     return word_counts,sent_total
        
 def write_to_vocab(vocab_fn,word_count,sent_total):

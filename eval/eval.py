@@ -92,7 +92,7 @@ def top_cluster_density(top_vec,similarity_scores):
     return inf_score
 
 
-# In[3]:
+# In[25]:
 
 
 def load_w2salience(model_w2v,w2salience_f,weight_type):
@@ -119,25 +119,24 @@ def skipgram_context(model,words,pos,weight=None,w2entropy=None):
     weights=[]
     for i,word in enumerate(words):
         if i != pos: #surroudn context words
-            try:
+            if word in model:
                 if weight ==LDA:
-                    if word in w2entropy and word in model:
+                    if word in w2entropy:
 #                         print (word,w2entropy[word])
                         weights.append(1/(w2entropy[word]+1.0))
                         context_wvs.append(model[word])
         
                 elif weight in [INVERSE_W_FREQ,INVERSE_S_FREQ]:
-                    if word in w2entropy and word in model:
-#                         print (word,w2entropy[word])
+                    if word in w2entropy:
+                        model[word]
                         weights.append(w2entropy[word])
                         context_wvs.append(model[word])
                 else:
                     #equal weights per word
                     context_wvs.append(model[word])
-#                     print ('skipgram context',model[word][:10])
                     weights.append(1.0)
-            except KeyError as e:
-                print ('==warning==: key error in context {0}'.format(e))
+            else:
+                print ('==warning==: key error in context {0}'.format(word))
 #     print ('per word weights',weights)
     context_embed=sum(np.array(context_wvs)*np.array(weights).reshape(len(weights),1))#/sum(weights)
 #     print ('skipgram context sum:', context_embed[:10])
@@ -222,14 +221,13 @@ def additive_model(test_ss,test_w, model_type,model,n_result,w_filter,index2word
     for test_id in range(len(test_ss)):
         test_s=test_ss[test_id]
         test_s=test_s.lower().strip()
-        
         #produce context representation with scores
         if type(context2vec_preembeds)!=type(None):
             context_embed=xp.array(context2vec_preembeds[test_id])
             score=float(scores[test_id])
         else:
+            
             score,context_embed=context_inform(test_s,test_w, model,model_type,n_result,w_filter,index2word,weight,w2entropy,w_target,word2index_target,index2word_target)
-        
         
         if score==0 or context_embed.all()==0:
             print ('empty context vector')
@@ -330,7 +328,7 @@ def filter_w(w,word2index,index2word):
     index_filter2index=[]
     counter=0
     for word in word2index:
-            if word not in stopw: #and re.search(r'[a-zA-Z]',word)!=None:
+            if word not in stopw: #and re.search(r'[^a-zA-Z]',word)==None:
                     index_filter2index.append(word2index[word])
                     word2index_filter[word]=counter
                     index2word_filter[counter]=word
@@ -348,7 +346,7 @@ def rm_stopw_context(model):
 
 
 
-# In[5]:
+# In[31]:
 
 
 def cosine(context_avg,probe_w_vec):
@@ -377,7 +375,7 @@ def preprocess_nonce(sent,contexts):
         sents_out.append(sent_masked+' .')
     return sents_out
 
-def update_mrr(nns,nonce,mrr,ranks,c):
+def update_mrr(nns,nonce,mrr,ranks):
     rr = 0
     n = 1
     for nn in nns:
@@ -392,13 +390,14 @@ def update_mrr(nns,nonce,mrr,ranks,c):
     if rr != 0:
         mrr+=float(1)/float(rr)	
     print rr,mrr
-    c+=1
-    return mrr,ranks,c
+    return mrr,ranks
+
 def eval_nonce(nonce_data_f,context_model,model_w2v,model_type,n_result,w,index2word,word2index,weight=False,w2entropy=None,w_target=None,word2index_target=None,index2word_target=None,contexts=None):
+        #read in contexts
         ranks = []
         mrr = 0.0
         data=pd.read_csv(os.path.join(nonce_data_f),delimiter='\t',header=None,comment='#')
-        c = 0
+        
         for index, row in data.iterrows():
             if index>100 and index%100==0:
                 print (index)
@@ -413,28 +412,78 @@ def eval_nonce(nonce_data_f,context_model,model_w2v,model_type,n_result,w,index2
                 
             # MRR Rank calculation
             nns=model_w2v.similar_by_vector(context_avg,topn=len(model_w2v.wv.vocab))
-            mrr,ranks,c=update_mrr(nns,nonce,mrr,ranks,c)
-#             rr = 0
-#             n = 1
-#             for nn in nns:
-#                 word = nn[0]
-#                 if word == nonce:
-#                     print (word)
-#                     rr = n
-#                     ranks.append(rr)
-#                 else:
-#                     n+=1
+            mrr,ranks=update_mrr(nns,nonce,mrr,ranks)
 
-#             if rr != 0:
-#                 mrr+=float(1)/float(rr)	
-#             print rr,mrr
-#             c+=1
-        print ("Final MRR: ",mrr,c,float(mrr)/float(c))
-
+        print ("Final MRR: ",mrr,len(ranks),float(mrr)/float(len(ranks)))
+        print ('mean: ', np.mean(ranks))
         print ('mediam : {0}'.format(np.median(ranks)))
         return ranks
             
+def eval_nonce_withcontexts(nonce_data_f,context_model,model_w2v,model_type,n_result,w,index2word,word2index,weight=False,w2entropy=None,w_target=None,word2index_target=None,index2word_target=None,trials=100):
 
+    data=pd.read_csv(os.path.join(nonce_data_f),delimiter='\t',header=None,comment='#')
+    ranks=defaultdict(lambda: defaultdict(list))
+    mrrs=defaultdict(lambda: defaultdict(int))
+    context2vec_preembeds_all=None
+    context2vec_preembeds=None
+    scores_all=None
+    orders_inf=None
+    scores=None
+#     start evaluation
+    contexts_f=os.path.join(os.path.dirname(nonce_data_f),'contexts')
+    
+    for index, row in data.iterrows():
+        rw=row[0]
+        if rw not in model_w2v:
+                print ('{0} not known'.format(rw))
+                continue
+        if not os.path.isfile(os.path.join(contexts_f,rw+'.txt')):
+            print ('{0} does not have contexts'.format(rw))
+            continue
+            
+        print ('\n==========processing rareword {0}'.format(rw))
+
+        #definition:
+#         sents_def=preprocess_nonce(row[1],contexts)
+#         context_avg_def=contexts_per_tgw(sents,model_type,context_model,n_result,w,index2word,weight,w2entropy,w_target,word2index_target,index2word_target)
+
+        #contexts:
+        #load sentences
+        sents_all=load_sents(contexts_f,rw)
+        #load contexts
+        if 'context2vec' in model_type.split('?')[0]:
+                if model_type=='context2vec-skipgram?skipgram':
+                    context2vec_preembeds_all,scores_all=load_contexts(rw,sents_all,context_model[0],model_type.split('?')[0],n_result,w[0],index2word[0],weight[0],w2entropy[0],w_target[0],word2index_target[0],index2word_target[0])
+                elif model_type=='context2vec-skipgram':
+                    context2vec_preembeds_all,scores_all=load_contexts(rw,sents_all,context_model,model_type.split('?')[0],n_result,w,index2word,weight[0],w2entropy,w_target,word2index_target,index2word_target)
+                orders_inf=(-scores_all).argsort()
+        #do trials
+        for trial in range(trials):
+            print ('\n=====Trial no. {0}'.format(trial))
+            perm = np.random.permutation(255)
+            for logfreq in range(8):
+                freq = 2**logfreq
+                print ('\ncontext num is {0}'.format(freq))
+                context2vec_preembeds, scores,sents=produce_contexts_per_trial(trials,freq,perm,scores_all,context2vec_preembeds_all,orders_inf,sents_all)
+                context_avg=contexts_per_tgw(sents,model_type,context_model,n_result,w,index2word,weight,w2entropy,w_target,word2index_target,index2word_target,context2vec_preembeds,scores)
+                
+                if type(context_avg)!=type(None):
+                    if xp==cuda.cupy:
+                        context_avg=xp.asnumpy(context_avg)
+                
+                    # MRR Rank calculation
+                    nns=model_w2v.similar_by_vector(context_avg,topn=len(model_w2v.wv.vocab))
+                    mrrs[trial][freq],ranks[trial][freq]=update_mrr(nns,rw,mrrs[trial][freq],ranks[trial][freq])
+    mrr_res=defaultdict(list)
+    median_res=defaultdict(list)
+    for trial in mrrs:
+        for freq in mrrs[trial]:
+            mrr_res[freq].append(float(mrrs[trial][freq])/float(len(ranks[trial][freq])))
+            median_res[freq].append(np.median(ranks[trial][freq]))
+    print ('{0}\t{1}\t{2}\t{3}\t{4}'.format('freq','MRR','MRR_STD','MEDIAN','MEDIAN_STD'))
+    for freq in sorted(mrr_res.keys()):
+        print ('{0}\t{1}\t{2}\t{3}\t{4} '.format(freq,np.mean(np.array(mrr_res[freq])),np.std(np.array(mrr_res[freq])),np.mean(np.array(median_res[freq])),np.std(np.array(median_res[freq]))))
+    return mrr_res,median_res
 
 def eval_chimera(chimeras_data_f,context_model,model_type,n_result,w,index2word,word2index,weight=False,w2entropy=None,w_target=None,word2index_target=None,index2word_target=None):
     chimeras_data_dir=os.path.dirname(chimeras_data_f)
@@ -480,6 +529,7 @@ def load_contexts(rw,sents,model,model_type,n_result,w_filter,index2word,weight,
     scores=[]
     for i,test_s in enumerate(sents):
         test_s=sents[i]
+        print (test_s)
         test_s=test_s.replace(TARGET_W, ' '+TARGET_W+' ')
         print(i),
         words=test_s.split()
@@ -506,7 +556,7 @@ def load_sents(contexts_f,rw):
     sents_all=np.array(sents_all)
     return sents_all
 
-def produce_contexts_per_trial(trials,freq,scores_all,context2vec_preembeds_all,orders_inf,sents_all):
+def produce_contexts_per_trial(trials,freq,perm,scores_all,context2vec_preembeds_all,orders_inf,sents_all):
     if trials==1 and type(scores_all)!=type(None):
         context_inds=orders_inf[:freq]
     else:
@@ -517,7 +567,10 @@ def produce_contexts_per_trial(trials,freq,scores_all,context2vec_preembeds_all,
     if type(context2vec_preembeds_all)!=type(None):
         context2vec_preembeds=context2vec_preembeds_all[context_inds,]
         scores=scores_all[context_inds,]
-    return context2vec_preembeds, scores,sents
+        return context2vec_preembeds, scores,sents
+    else:
+        return None,None,sents
+    
 
 def eval_crw_stf(crw_stf_f,model_param_f,context_model,model_type,n_result,w,index2word,word2index,weight=False,w2entropy=None,w_target=None,word2index_target=None,index2word_target=None,trials=100):
     data=pd.read_csv(os.path.join(crw_stf_f),delimiter='\t',header=None,comment='#')
@@ -559,7 +612,7 @@ def eval_crw_stf(crw_stf_f,model_param_f,context_model,model_type,n_result,w,ind
             for logfreq in range(8):
                 freq = 2**logfreq
                 print ('\ncontext num is {0}'.format(freq))
-                context2vec_preembeds, scores,sents=produce_contexts_per_trial(trials,freq,scores_all,context2vec_preembeds_all,orders_inf,sents_all)
+                context2vec_preembeds, scores,sents=produce_contexts_per_trial(trials,freq,perm,scores_all,context2vec_preembeds_all,orders_inf,sents_all)
                 context_avg=contexts_per_tgw(sents,model_type,context_model,n_result,w,index2word,weight,w2entropy,w_target,word2index_target,index2word_target,context2vec_preembeds,scores)
                 
                 if type(context_avg)!=type(None):
@@ -577,7 +630,7 @@ def eval_crw_stf(crw_stf_f,model_param_f,context_model,model_type,n_result,w,ind
             sps[freq].append(sp)
     print ('{0}\t{1}\t{2}'.format('freq','SPEARMAN RANKS MEAN','SPEARMAN RANKS STD'))
     for freq in sorted(sps.keys()):
-        print ('{0}\t{1}\t{2}: '.format(freq,np.mean(np.array(sps[freq])),np.std(np.array(sps[freq]))))
+        print ('{0}\t{1}\t{2} '.format(freq,np.mean(np.array(sps[freq])),np.std(np.array(sps[freq]))))
     return model_predicts,sps
 
             
@@ -585,7 +638,7 @@ def eval_crw_stf(crw_stf_f,model_param_f,context_model,model_type,n_result,w,ind
             
 
 
-# In[7]:
+# In[6]:
 
 
 if __name__=="__main__":
@@ -604,21 +657,21 @@ if __name__=="__main__":
         
         ###data:
 #         data='./eval_data/data-chimeras/dataset_alacarte.l2.fixed.test.txt.punct'
-#         data='./eval_data/data-nonces/n2v.definitional.dataset.test.txt'
-        data='./eval_data/CRW/CRW-562.txt'
-        weights=[WEIGHT_DICT[5],WEIGHT_DICT[3]]
+        data='./eval_data/data-nonces/n2v.definitional.dataset.test.txt'
+#         data='./eval_data/CRW/CRW-562.txt'
+#         weights=[WEIGHT_DICT[5],WEIGHT_DICT[3]]
 #         weights=[WEIGHT_DICT[0]]
-        gpu=0
-        model_type='context2vec-skipgram?skipgram'
+        gpu=-1
+        model_type='skipgram'
         w2salience_f=None
         n_result=20
-        trials=1
+        trials=100
 #         skipgram_model_f='./eval_data/CRW/vectors.txt'
-#         skipgram_model_f='../models/wiki_all.model/wiki_all.sent.split.model'
-        context2vec_model_f='../models/context2vec/model_dir/MODEL-wiki.params.14'
+        skipgram_model_f='../models/wiki_all.model/wiki_all.sent.split.model'
+        context2vec_model_f='../models/context2vec/model_dir/MODEL-wiki.params.12'
         ######w2salience_f
-#         w2salience_f='../corpora/corpora/wiki.all.utf8.sent.split.tokenized.vocab'
-        w2salience_f='../corpora/corpora/WWC_norarew.txt.tokenized.vocab'
+        w2salience_f='../corpora/corpora/wiki.all.utf8.sent.split.tokenized.vocab'
+#         w2salience_f='../corpora/corpora/WWC_norarew.txt.tokenized.vocab'
 #         w2salience_f='../models/lda/w2entropy'
 
 
@@ -633,7 +686,7 @@ if __name__=="__main__":
     else:
         
 
-        parser = argparse.ArgumentParser(description='Process some integers.')
+        parser = argparse.ArgumentParser(description='Evauate on rare words.')
         parser.add_argument('--f',  type=str,
                             help='model_param_file',dest='model_param_file')
         parser.add_argument('--m', dest='model_type', type=str,
@@ -783,22 +836,21 @@ if __name__=="__main__":
     print (model_param_file,model_type,weights,data,w2salience_f)
 
 
-# In[ ]:
+# In[32]:
 
 
 ##### 6. read in data and perform evaluation
 import time
 start_time = time.time()
 
-
-#     data='./eval_data/data-chimeras/dataset_alacarte.l6.fixed.test.txt.punct'
 print (os.path.basename(os.path.split(data)[0]))
 if os.path.basename(os.path.split(data)[0])== 'data-chimeras':
 
         eval_chimera(data,model,model_type,n_result,w,index2word,word2index,weights,w2salience,w_target,word2index_target,index2word_target)
 
 elif os.path.basename(os.path.split(data)[0])== 'data-nonces':
-        ranks=eval_nonce(data,model,model_w2v,model_type,n_result,w,index2word,word2index,weights,w2salience,w_target,word2index_target,index2word_target)
+#             ranks=eval_nonce(data,model,model_w2v,model_type,n_result,w,index2word,word2index,weights,w2salience,w_target,word2index_target,index2word_target)
+        eval_nonce_withcontexts(data,model,model_w2v,model_type,n_result,w,index2word,word2index,weights,w2salience,w_target,word2index_target,index2word_target,trials)
 
 elif os.path.basename(os.path.split(data)[0])=='CRW':
     
