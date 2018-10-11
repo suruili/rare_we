@@ -81,7 +81,7 @@ if __name__=='__main__':
                                 print ('{0} done'.format(rareword))
                                 rarewords.remove(rareword)
                                 print (outf,rareword)
-                                with open(os.path.join(outf,rareword+'.txt'),'w') as out_f:
+                                with open(os.path.join(outf,rareword.replace('/','_')+'.txt'),'w') as out_f:
                                     out_f.writelines(rareword2contexts[rareword])
                             break
     for rareword in rarewords:
