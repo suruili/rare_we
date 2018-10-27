@@ -40,7 +40,7 @@ class SentenceLength2WordIndices:
         self.sentences[length] = []
 
 
-class Context2vecBatchGenerator:
+class ContextConverter:
 
     def __init__(self, model_param_file: str, output_file_path: str, index_output_file_path: str,
                  gpu: int, batch_size: int):
@@ -166,15 +166,15 @@ def main(argv=None):
     setup_cuda(args.gpu)
 
     # 3. process context2vec text into vectors and store in h5py
-    batch_generator = Context2vecBatchGenerator(
+    context_converter = ContextConverter(
         model_param_file=args.model_param_file,
         output_file_path=construct_output_file_path(args.text_file_dir, args.model_param_file),
         index_output_file_path=construct_index_output_file(args.text_file_dir, args.model_param_file),
         batch_size=args.batch_size,
         gpu=args.gpu
     )
-    batch_generator.process_file_dir(args.text_file_dir)
-    batch_generator.output_h5_file.close()
+    context_converter.process_file_dir(args.text_file_dir)
+    context_converter.output_h5_file.close()
 
 
 if __name__ == '__main__':

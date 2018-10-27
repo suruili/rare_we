@@ -10,3 +10,4 @@ They only confuse yourself.
  there should be max one line. If statement can also be a function, if it helps you understand what the statement is doing. 
 9. It is all about readability. Always think, will you be able to understand a code, if if you haven't worked on it for a while
 Make changes that will help you understand/remember what you are doing. 
+10. Generator means something in Python. so don't give your Class a name that has a specific meaning in a language. 
